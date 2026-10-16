@@ -73,25 +73,37 @@ FVector ABoid::FindWanderDestination(float radius, float distance) {
 FVector ABoid::BoundaryCheck(FVector managerLocation, float boundary, float deltaTime) {
 	FVector newVelocity = FVector::ZeroVector;
 
-	if (boidLocation.Z > 500 + managerLocation.Z) {
-		newVelocity += Seek(managerLocation, Manager->arrivalRadius);
+	float margin = 150.0f;
+
+	float distFromCenterX = boidLocation.X - managerLocation.X;
+	if (distFromCenterX > (boundary - margin)) {
+		// Closer to the positive edge = stronger push back
+		float intensity = FMath::Clamp((distFromCenterX - (boundary - margin)) / margin, 0.0f, 1.0f);
+		newVelocity.X -= intensity * 2.0f; // Push inward
 	}
-	if (boidLocation.Z < managerLocation.Z - 500) {
-		newVelocity += Seek(managerLocation, Manager->arrivalRadius);
+	else if (distFromCenterX < -(boundary - margin)) {
+		float intensity = FMath::Clamp((-distFromCenterX - (boundary - margin)) / margin, 0.0f, 1.0f);
+		newVelocity.X += intensity * 2.0f;
 	}
-	if (boidLocation.X > boundary + managerLocation.X) {
-		newVelocity += Seek(managerLocation, Manager->arrivalRadius);
+	float distFromCenterY = boidLocation.Y - managerLocation.Y;
+	if (distFromCenterY > (boundary - margin)) {
+		float intensity = FMath::Clamp((distFromCenterY - (boundary - margin)) / margin, 0.0f, 1.0f);
+		newVelocity.Y -= intensity * 2.0f;
 	}
-	if (boidLocation.X < managerLocation.X - boundary) {
-		newVelocity += Seek(managerLocation, Manager->arrivalRadius);
+	else if (distFromCenterY < -(boundary - margin)) {
+		float intensity = FMath::Clamp((-distFromCenterY - (boundary - margin)) / margin, 0.0f, 1.0f);
+		newVelocity.Y += intensity * 2.0f;
 	}
-	if (boidLocation.Y > boundary + managerLocation.Y) {
-		newVelocity += Seek(managerLocation, Manager->arrivalRadius);
+	float distFromCenterZ = boidLocation.Z - managerLocation.Z;
+	float zLimit = 500.0f;
+	if (distFromCenterZ > (zLimit - margin)) {
+		float intensity = FMath::Clamp((distFromCenterZ - (zLimit - margin)) / margin, 0.0f, 1.0f);
+		newVelocity.Z -= intensity * 2.0f;
 	}
-	if (boidLocation.Y < managerLocation.Y - boundary) {
-		newVelocity += Seek(managerLocation, Manager->arrivalRadius);
+	else if (distFromCenterZ < -(zLimit - margin)) {
+		float intensity = FMath::Clamp((-distFromCenterZ - (zLimit - margin)) / margin, 0.0f, 1.0f);
+		newVelocity.Z += intensity * 2.0f;
 	}
-	newVelocity.Normalize();
 	return newVelocity;
 }
 FVector ABoid::Alignment(TArray<ABoid*> neighbours)
@@ -135,31 +147,25 @@ void ABoid::Tick(float DeltaTime)
 void ABoid::UpdateBoid(float deltaTime) {
 	TArray<ABoid*> neighbourhood = Manager->GetBoidNeighbourhood(this, Manager->neighbourhoodRadius);
 
-	FVector newVelocity = BoundaryCheck(Manager->managerLocation, Manager->boundary, deltaTime);
+	FVector newVelocity = FVector::ZeroVector;
+	newVelocity += BoundaryCheck(Manager->managerLocation, Manager->boundary, deltaTime) * Manager->boundaryVelocity;
 
+	if (newVelocity.Size() < 100.0f) {
+		newVelocity += Separation(neighbourhood) * Manager->separationWeight;
+	}
+	if (newVelocity.Size() < 100.0f) {
+		newVelocity += Cohesion(neighbourhood) * Manager->cohesionWeight;
+	}
+	if (newVelocity.Size() < 100.0f) {
+		newVelocity += Alignment(neighbourhood) * Manager->alignmentWeight;
+	}
+	if (newVelocity.Size() < 120.0f) {
+		newVelocity += Wander(Manager->wanderRadius, Manager->wanderDistance);
+	}
 	if (!newVelocity.IsNearlyZero()) {
-		newVelocity *= Manager->boundaryVelocity;
-	}
-	else {
-		//Weighted Truncated Running Sum with Priority
-		if (newVelocity.Size() < 100.0f) {
-			newVelocity += Separation(neighbourhood) * Manager->separationWeight;
-		}
-		if (newVelocity.Size() < 100.0f) {
-			newVelocity += Cohesion(neighbourhood) * Manager->cohesionWeight;
-		}
-		if (newVelocity.Size() < 100.0f) {
-			newVelocity += Alignment(neighbourhood) * Manager->alignmentWeight;
-		}
-		if (newVelocity.Size() < 120.0f) {
-			newVelocity += Wander(Manager->wanderRadius, Manager->wanderDistance);
-		}
-	}
-	newVelocity.Normalize();
-	FVector newForce = (newVelocity - currentVelocity);
-	currentVelocity += newForce * deltaTime;
-	if (Manager->drawVectorDebugCheck) {
-		DrawDebugLine(GetWorld(), boidLocation, (boidLocation + newVelocity) * 5, FColor::Red);
+		newVelocity.Normalize();
+		FVector newForce = (newVelocity - currentVelocity);
+		currentVelocity += newForce * deltaTime;
 	}
 	boidLocation += (currentVelocity * Manager->speed * deltaTime);
 
