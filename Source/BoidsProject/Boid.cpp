@@ -70,80 +70,29 @@ FVector ABoid::FindWanderDestination(float radius, float distance) {
 	}
 	return wanderDestination;
 }
-void ABoid::BoundaryCheck(FVector managerLocation, float boundary, FVector newVelocity, float deltaTime) {
-	//always restrict height between +500 and -500 of manager location
+FVector ABoid::BoundaryCheck(FVector managerLocation, float boundary, float deltaTime) {
+	FVector newVelocity = FVector::ZeroVector;
+
 	if (boidLocation.Z > 500 + managerLocation.Z) {
-		newVelocity = Seek(boidLocation + (FVector(FMath::VRand() * 100) - FVector(0, 0, 200)), Manager->arrivalRadius);
-		newVelocity.Normalize();
-		FVector newForce = newVelocity;
-		currentVelocity += newForce * deltaTime;
-		boidLocation += (currentVelocity * Manager->speed * deltaTime);
-		SetActorLocation(boidLocation);
-		SetActorRotation(currentVelocity.Rotation());
+		newVelocity += Seek(managerLocation, Manager->arrivalRadius);
 	}
-	else if (boidLocation.Z < managerLocation.Z - 500) {
-		newVelocity = Seek(boidLocation + (FVector(FMath::VRand() * 100) + FVector(0, 0, 200)), Manager->arrivalRadius);
-		newVelocity.Normalize();
-		FVector newForce = newVelocity;
-		currentVelocity += newForce * deltaTime;
-		boidLocation += (currentVelocity * Manager->speed * deltaTime);
-		SetActorLocation(boidLocation);
-		SetActorRotation(currentVelocity.Rotation());
+	if (boidLocation.Z < managerLocation.Z - 500) {
+		newVelocity += Seek(managerLocation, Manager->arrivalRadius);
 	}
-	//If wrapping boundary is enabled teleport to opposite side when exceeding boundary
-	if (Manager->wrapBoundaryCheck) {
-		if (boidLocation.X > boundary - managerLocation.X) {
-			SetActorLocation(FVector(boidLocation.X - boundary * 2, boidLocation.Y, boidLocation.Z));
-		}
-		else if (boidLocation.X < managerLocation.X - boundary) {
-			SetActorLocation(FVector(boidLocation.X + boundary * 2, boidLocation.Y, boidLocation.Z));
-		}
-		if (boidLocation.Y > boundary - managerLocation.Y) {
-			SetActorLocation(FVector(boidLocation.X, boidLocation.Y - boundary * 2, boidLocation.Z));
-		}
-		else if (boidLocation.Y < managerLocation.Y - boundary) {
-			SetActorLocation(FVector(boidLocation.X, boidLocation.Y + boundary * 2, boidLocation.Z));
-		}
+	if (boidLocation.X > boundary + managerLocation.X) {
+		newVelocity += Seek(managerLocation, Manager->arrivalRadius);
 	}
-	//If wrapping boundary is disabled apply seek force away from boundary when exceeded
-	else if (!Manager->wrapBoundaryCheck) {
-		if (boidLocation.X > boundary + managerLocation.X) {
-			newVelocity = Seek(boidLocation + (FVector(FMath::VRand() * 100) - FVector(200, 0, 0)), Manager->arrivalRadius);
-			newVelocity.Normalize();
-			FVector newForce = newVelocity;
-			currentVelocity += newForce * deltaTime;
-			boidLocation += (currentVelocity * Manager->speed * deltaTime);
-			SetActorLocation(boidLocation);
-			SetActorRotation(currentVelocity.Rotation());
-		}
-		else if (boidLocation.X < managerLocation.X - boundary) {
-			newVelocity = Seek(boidLocation + (FVector(FMath::VRand() * 100) + FVector(200, 0, 0)), Manager->arrivalRadius);
-			newVelocity.Normalize();
-			FVector newForce = newVelocity;
-			currentVelocity += newForce * deltaTime;
-			boidLocation += (currentVelocity * Manager->speed * deltaTime);
-			SetActorLocation(boidLocation);
-			SetActorRotation(currentVelocity.Rotation());
-		}
-		if (boidLocation.Y > boundary + managerLocation.Y) {
-			newVelocity = Seek(boidLocation + (FVector(FMath::VRand() * 100) - FVector(0, 200, 0)), Manager->arrivalRadius);
-			newVelocity.Normalize();
-			FVector newForce = newVelocity;
-			currentVelocity += newForce * deltaTime;
-			boidLocation += (currentVelocity * Manager->speed * deltaTime);
-			SetActorLocation(boidLocation);
-			SetActorRotation(currentVelocity.Rotation());
-		}
-		else if (boidLocation.Y < managerLocation.Y - boundary) {
-			newVelocity = Seek(boidLocation + (FVector(FMath::VRand() * 100) + FVector(0, 200, 0)), Manager->arrivalRadius);
-			newVelocity.Normalize();
-			FVector newForce = newVelocity;
-			currentVelocity += newForce * deltaTime;
-			boidLocation += (currentVelocity * Manager->speed * deltaTime);
-			SetActorLocation(boidLocation);
-			SetActorRotation(currentVelocity.Rotation());
-		}
+	if (boidLocation.X < managerLocation.X - boundary) {
+		newVelocity += Seek(managerLocation, Manager->arrivalRadius);
 	}
+	if (boidLocation.Y > boundary + managerLocation.Y) {
+		newVelocity += Seek(managerLocation, Manager->arrivalRadius);
+	}
+	if (boidLocation.Y < managerLocation.Y - boundary) {
+		newVelocity += Seek(managerLocation, Manager->arrivalRadius);
+	}
+	newVelocity.Normalize();
+	return newVelocity;
 }
 FVector ABoid::Alignment(TArray<ABoid*> neighbours)
 {
@@ -160,7 +109,7 @@ FVector ABoid::Cohesion(TArray<ABoid*> neighbours)
 	if (neighbours.Num() == 0) return FVector::ZeroVector;
 	FVector avgVelocity = FVector::ZeroVector;
 	for (ABoid* neighbour : neighbours) {
-		avgVelocity += neighbour->GetActorLocation();
+		avgVelocity += Seek(neighbour->GetActorLocation(), Manager->arrivalRadius);
 	}
 	avgVelocity = avgVelocity / neighbours.Num();
 	avgVelocity.Normalize();
@@ -185,20 +134,26 @@ void ABoid::Tick(float DeltaTime)
 }
 void ABoid::UpdateBoid(float deltaTime) {
 	TArray<ABoid*> neighbourhood = Manager->GetBoidNeighbourhood(this, Manager->neighbourhoodRadius);
-	FVector newVelocity = FVector::ZeroVector;
 
-	//Weighted Truncated Running Sum with Priority
-	if (newVelocity.Size() < 100.0f) {
-		newVelocity += Separation(neighbourhood) * Manager->separationWeight;
+	FVector newVelocity = BoundaryCheck(Manager->managerLocation, Manager->boundary, deltaTime);
+
+	if (!newVelocity.IsNearlyZero()) {
+		newVelocity *= Manager->boundaryVelocity;
 	}
-	if (newVelocity.Size() < 100.0f) {
-		newVelocity += Cohesion(neighbourhood) * Manager->cohesionWeight;
-	}
-	if (newVelocity.Size() < 100.0f) {
-		newVelocity += Alignment(neighbourhood) * Manager->alignmentWeight;
-	}
-	if (newVelocity.Size() < 120.0f) {
-		newVelocity += Wander(Manager->wanderRadius, Manager->wanderDistance);
+	else {
+		//Weighted Truncated Running Sum with Priority
+		if (newVelocity.Size() < 100.0f) {
+			newVelocity += Separation(neighbourhood) * Manager->separationWeight;
+		}
+		if (newVelocity.Size() < 100.0f) {
+			newVelocity += Cohesion(neighbourhood) * Manager->cohesionWeight;
+		}
+		if (newVelocity.Size() < 100.0f) {
+			newVelocity += Alignment(neighbourhood) * Manager->alignmentWeight;
+		}
+		if (newVelocity.Size() < 120.0f) {
+			newVelocity += Wander(Manager->wanderRadius, Manager->wanderDistance);
+		}
 	}
 	newVelocity.Normalize();
 	FVector newForce = (newVelocity - currentVelocity);
@@ -210,6 +165,5 @@ void ABoid::UpdateBoid(float deltaTime) {
 
 	SetActorLocation(boidLocation);
 	SetActorRotation(currentVelocity.Rotation());
-	BoundaryCheck(Manager->managerLocation, Manager->boundary, newVelocity, deltaTime);
 }
 

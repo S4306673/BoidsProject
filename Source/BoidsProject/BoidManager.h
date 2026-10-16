@@ -30,6 +30,8 @@ public:
 	UPROPERTY(Config, EditAnywhere, BlueprintReadWrite, Category = "Boundary Settings")
 	float boundary;
 	UPROPERTY(Config, EditAnywhere, BlueprintReadWrite, Category = "Boundary Settings")
+	float boundaryVelocity;
+	UPROPERTY(Config, EditAnywhere, BlueprintReadWrite, Category = "Boundary Settings")
 	bool wrapBoundaryCheck;
 	UPROPERTY(Config, EditAnywhere, BlueprintReadWrite, Category = "Setting")
 	float speed;

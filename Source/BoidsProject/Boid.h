@@ -17,6 +17,7 @@ public:
 
 	FVector Seek(FVector position, float radius);
 	FVector Flee(FVector position);
+	UPROPERTY(Config, EditAnywhere, BlueprintReadOnly, Category = "Velocity")
 	FVector currentVelocity;
 	FVector boidLocation;
 	UPROPERTY(BlueprintReadOnly, Category = "Settings")
@@ -30,7 +31,7 @@ protected:
 	FVector Wander(float radius, float distance);
 	FVector wanderDestination;
 	FVector FindWanderDestination(float radius, float distance);
-	void BoundaryCheck(FVector managerLocation, float boundaryRadius, FVector newVelocity, float deltaTime);
+	FVector BoundaryCheck(FVector managerLocation, float boundaryRadius, float deltaTime);
 
 	FVector Alignment(TArray<ABoid*> neighbours);
 	FVector Cohesion(TArray<ABoid*> neighbours);
